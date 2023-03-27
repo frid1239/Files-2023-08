@@ -1,0 +1,293 @@
+/*******************************************************************************
+* Instrument: <instrument name>
+*
+* %I
+* Written by: <your name (email)>
+* Date: <current date>
+* Origin: <your institution>
+* %INSTRUMENT_SITE: Templates
+*
+* <instrument short description>
+*
+* %D
+* <instrument description>
+*
+* Example: <parameters=values>
+*
+* %P
+* <parameter1>: [<unit>] <parameter1 description>
+* ...
+*
+* %L
+* <reference/HTML link>
+*
+* %E
+*******************************************************************************/
+DEFINE INSTRUMENT template_body_simple(E=0,h=0,l=4,dA3=-90,phononmode=0,Ef=14.7)
+
+DECLARE
+%{
+//double Ef=24.8
+double Ei;
+//meV
+double thetaM;
+double thetaS;
+double thetaA;
+double A3;
+double QM;
+double alpha;
+double Eilambda;
+%}
+
+INITIALIZE
+%{
+Ei=Ef+E;
+//double mnoverhbarsquare = 0.241;
+//nm^(-2)eV^{-1}
+double pi = 3.14159;
+
+double a = 2.461;
+double c =  6.708;
+//AA
+
+double astar = 4*pi/(sqrt(3)*a);
+double cstar = 2*pi/c;
+//AA^-1
+
+//calculate |k|
+double ki = V2K*SE2V*sqrt(Ei);
+double kf = V2K*SE2V*sqrt(Ef);
+//1/nm
+//calculate |q|
+double q = sqrt(h*h*astar*astar+l*l*cstar*cstar);
+
+// Set monochromator/analyzer Q-value
+QM = 1.8049;
+//2thetaS
+thetaS = acos((q*q-ki*ki-kf*kf)/(-2*ki*kf))*RAD2DEG;
+//alpha
+alpha = acos((kf*kf-ki*ki-q*q)/(-2*ki*q));
+//2thetaM
+thetaM = asin(QM/(2*ki))*RAD2DEG;
+
+//2thetaA
+thetaA = asin(QM/(2*kf))*RAD2DEG;
+
+//calculate A3
+A3=(asin(l*cstar/q)-alpha)*RAD2DEG;
+
+Eilambda=2*pi/ki;
+
+printf("2thetaS = %g \n",thetaS);
+printf("A3 = %g \n",A3);
+printf("alpha = %g \n",alpha);
+printf("ki = %g \n",ki);
+printf("thetaA=%g\n",thetaA);
+printf("thetaM=%g\n",thetaM);
+
+%}
+
+TRACE
+
+COMPONENT origin = Progress_bar()
+AT (0, 0, 0) RELATIVE ABSOLUTE
+
+// insert components here (e.g. Insert -> Source -> ...)
+
+COMPONENT source_maxwell_3 = Source_Maxwell_3(
+    xwidth=0.085,
+    yheight=0.16,
+    Lmin=Eilambda-0.05, 
+    Lmax=Eilambda+0.05, 
+    dist=7.5, 
+    focus_yh=0.229, 
+    focus_xw=0.05, 
+    T1=300, 
+    T2=300, 
+    T3=300, 
+    I1=10E15,
+    I2=10E15,
+    I3=10E15)
+    
+AT (0, 0, 0) RELATIVE PREVIOUS
+
+/* COMPONENT guide_simple = Guide_simple(
+    w1=0.030, 
+    h1=0.120, 
+    w2=0.030, 
+    h2=0.120, 
+    l=4.5+20,  
+    m=2)
+AT (0, 0, 1.5) RELATIVE PREVIOUS
+*/
+
+
+COMPONENT l_monitor_before_mono = L_monitor(
+    nL=200, 
+    filename="lbeforemono", 
+    Lmin=0, 
+    Lmax=5,   
+    xwidth=0.16, 
+    yheight=0.25, 
+
+restore_neutron=1)
+AT (0, 0,7.4) RELATIVE PREVIOUS
+
+COMPONENT collimator_linear0 = Collimator_linear(
+    xwidth=0.1, 
+    yheight=0.2, 
+    length=0.05, 
+    divergence=40)
+AT (0, 0, 0.1) RELATIVE PREVIOUS
+
+COMPONENT monochromator_flat = Monochromator_flat(
+     mosaicv=37,
+     Q=QM)
+AT (0, 0, 0.1) RELATIVE PREVIOUS
+ROTATED (0, thetaM, 0) RELATIVE PREVIOUS
+
+COMPONENT arm1 = Arm()
+AT (0, 0, 0) RELATIVE PREVIOUS
+ROTATED (0, thetaM, 0) RELATIVE PREVIOUS
+
+COMPONENT l_monitor_after_mono = L_monitor(
+    nL=200, 
+    filename="laftermono", 
+    Lmin=0, 
+    Lmax=5,restore_neutron=1)
+AT (0, 0,0.5) RELATIVE PREVIOUS
+
+COMPONENT collimator_linear1 = Collimator_linear(
+    xwidth=0.1, 
+    yheight=0.2, 
+    length=0.2, 
+    divergence=40)
+AT (0, 0, 0.7) RELATIVE arm1
+
+COMPONENT l_monitor_before_sam = L_monitor(
+    nL=200, 
+    filename="laftercolli", 
+    Lmin=0, 
+    Lmax=5,restore_neutron=1)
+AT (0, 0,0.9) RELATIVE arm1
+
+COMPONENT e_monitor_before_sam = E_monitor(
+    nE=100, 
+    filename="before_arm", 
+    Emin=Ei-2, 
+    Emax=Ei+2, 
+    restore_neutron=1)
+AT (0, 0, 0.01) RELATIVE PREVIOUS
+
+
+
+COMPONENT arm2 = Arm()
+AT (0, 0, 1) RELATIVE arm1
+ROTATED (0, 0, 0) RELATIVE arm1
+
+
+
+SPLIT 10
+
+
+COMPONENT phonon_bvk_pg = Phonon_BvK_PG(
+    radius=0.01, 
+    yheight=0.01, 
+    sigma_abs=0, 
+    sigma_inc=0, 
+    M=12, 
+    DW=1, 
+    T=300, 
+    mode_input=phononmode,
+    target_index=6,
+focus_xw=0.025,
+focus_yh=0.01)
+AT (0, 0, 0) RELATIVE PREVIOUS
+ROTATED (0, -A3+dA3, 0) RELATIVE PREVIOUS
+
+
+
+
+
+
+COMPONENT arm3 = Arm()
+AT (0, 0, 0) RELATIVE PREVIOUS
+//ROTATED (0,scan,0) RELATIVE arm2
+ROTATED (0, -thetaS, 0) RELATIVE arm2
+
+
+COMPONENT collimator_linear2 = Collimator_linear(
+    xwidth=0.1, 
+    yheight=0.2, 
+    length=0.2, 
+    divergence=40)
+AT (0, 0, 0.5) RELATIVE PREVIOUS
+
+
+
+COMPONENT psd_monitoraftersample = PSD_monitor(
+    nx=200, 
+    ny=200, 
+    filename="psdaftersample", 
+    restore_neutron=1)
+AT (0, 0, 0.5) RELATIVE PREVIOUS
+
+COMPONENT slit = Slit(
+    xwidth=0.025, 
+    yheight=0.150)
+AT (0, 0, 0.001) RELATIVE PREVIOUS
+
+COMPONENT e_monitor_beforeana = E_monitor(
+    nE=200, 
+    filename="Ebeforeana", 
+    xwidth=0.019, 
+    yheight=0.25, 
+    Emin=0, 
+    Emax=50)
+AT (0, 0, 0.001) RELATIVE PREVIOUS
+
+COMPONENT monochromator_flat2 = Monochromator_flat(
+    zwidth=0.025, 
+    yheight=0.150,
+    mosaicv=37,
+     Q=QM
+    )
+AT (0, 0, 0.02) RELATIVE PREVIOUS
+ROTATED (0, thetaA, 0) RELATIVE PREVIOUS
+
+
+
+
+COMPONENT arm4 = Arm()
+AT (0, 0, 0) RELATIVE PREVIOUS
+ROTATED (0, thetaA, 0) RELATIVE PREVIOUS
+
+COMPONENT collimator_linear3 = Collimator_linear(
+    xwidth=0.1, 
+    yheight=0.2, 
+    length=0.2, 
+    divergence=40)
+AT (0, 0, 0.5) RELATIVE PREVIOUS
+
+COMPONENT psd_monitor = PSD_monitor(
+    nx=128, 
+    ny=128, 
+    filename="afteranalyzer", 
+    xwidth=0.019, 
+    yheight=0.25)
+AT (0, 0, 0.5) RELATIVE PREVIOUS
+/*
+COMPONENT e_monitor = E_monitor(
+    nE=200, 
+    filename="Eafterdetector", 
+    xwidth=0.019, 
+    yheight=0.25, 
+    Emin=0, 
+    Emax=50)
+AT (0, 0, 0.001) RELATIVE PREVIOUS
+*/
+FINALLY
+%{
+%}
+
+END
